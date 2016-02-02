@@ -22,6 +22,7 @@ import com.android.accessorydisplay.common.Transport;
 
 import android.content.Context;
 import android.graphics.Rect;
+import android.graphics.Bitmap;
 import android.media.MediaCodec;
 import android.media.MediaCodec.BufferInfo;
 import android.media.MediaFormat;
@@ -34,7 +35,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class DisplaySinkService extends Service implements SurfaceHolder.Callback {
-    private final ByteBuffer mBuffer = ByteBuffer.allocate(12);
+    private final ByteBuffer mBuffer = ByteBuffer.allocate(16);
     private final Handler mTransportHandler;
     private final int mDensityDpi;
 
@@ -48,14 +49,22 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
     private Surface mSurface;
     private int mSurfaceWidth;
     private int mSurfaceHeight;
+    private int mTargetFormat = FORMAT_H264;
     private MediaCodec mCodec;
     private ByteBuffer[] mCodecInputBuffers;
     private BufferInfo mCodecBufferInfo;
+
+    // used for display jpg image
+    private Bitmap mBitmap;
 
     public DisplaySinkService(Context context, Transport transport, int densityDpi) {
         super(context, transport, Protocol.DisplaySinkService.ID);
         mTransportHandler = transport.getHandler();
         mDensityDpi = densityDpi;
+    }
+
+    public void setTargetFormat(int fmt) {
+        mTargetFormat = fmt;
     }
 
     public void setSurfaceView(final SurfaceView surfaceView) {
@@ -141,25 +150,35 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
             mSurfaceWidth = width;
             mSurfaceHeight = height;
 
-            if (mCodec != null) {
-                mCodec.stop();
-                mCodec = null;
-                mCodecInputBuffers = null;
-                mCodecBufferInfo = null;
-            }
-
-            if (mSurface != null) {
-                MediaFormat format = MediaFormat.createVideoFormat(
-                        "video/avc", mSurfaceWidth, mSurfaceHeight);
-                try {
-                    mCodec = MediaCodec.createDecoderByType("video/avc");
-                } catch (IOException e) {
-                    throw new RuntimeException(
-                            "failed to create video/avc decoder", e);
+            if (mTargetFormat == Protocol.FORMAT_H264) {
+                if (mCodec != null) {
+                    mCodec.stop();
+                    mCodec = null;
+                    mCodecInputBuffers = null;
+                    mCodecBufferInfo = null;
                 }
-                mCodec.configure(format, mSurface, null, 0);
-                mCodec.start();
-                mCodecBufferInfo = new BufferInfo();
+
+                if (mSurface != null) {
+                    MediaFormat format = MediaFormat.createVideoFormat(
+                            "video/avc", mSurfaceWidth, mSurfaceHeight);
+                    try {
+                        mCodec = MediaCodec.createDecoderByType("video/avc");
+                    } catch (IOException e) {
+                        throw new RuntimeException(
+                                "failed to create video/avc decoder", e);
+                    }
+                    mCodec.configure(format, mSurface, null, 0);
+                    mCodec.start();
+                    mCodecBufferInfo = new BufferInfo();
+                }
+            } else if (mTargetFormat == Protocol.FORMAT_JPEG) {
+                if (mBitmap != null) {
+                    mBitmap.recyle();
+                    mBitmap = null;
+                }
+                mBitmap = Bitmap.createBitmap(mSurfaceWidth, mSurfaceHeight, Bitmap.Config.ARGB_8888);
+            } else {
+                getLogger().logError("Not support format: " + mTargetFormat);
             }
 
             mTransportHandler.post(new Runnable() {
@@ -176,17 +195,28 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
             return;
         }
         synchronized (mSurfaceAndCodecLock) {
-            if (mCodec == null) {
-                return;
-            }
-
-            while (content.hasRemaining()) {
-                if (!provideCodecInputLocked(content)) {
-                    getLogger().log("Dropping content because there are no available buffers.");
+            if (mTargetFormat == Protocol.FORMAT_H264) {
+                if (mCodec == null) {
                     return;
                 }
 
-                consumeCodecOutputLocked();
+                while (content.hasRemaining()) {
+                    if (!provideCodecInputLocked(content)) {
+                        getLogger().log("Dropping content because there are no available buffers.");
+                        return;
+                    }
+
+                    consumeCodecOutputLocked();
+                }
+            } else if (mTargetFormat == Protocol.FORMAT_JPEG) {
+                if (mBitmap != null) {
+                    // TODO: decode jpg and save to mBitmap
+                    Canvas c = mSurface.lockHardwareCanvas();
+                    if (c != null) {
+                        c.drawBitmap(mBitmap, null, null, null);
+                        mSurface.unlockiCanvasAndPost(c);
+                    }
+                }
             }
         }
     }
@@ -229,12 +259,16 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
 
     private void sendSinkStatus() {
         synchronized (mSurfaceAndCodecLock) {
-            if (mCodec != null) {
-                mBuffer.clear();
-                mBuffer.putInt(mSurfaceWidth);
-                mBuffer.putInt(mSurfaceHeight);
-                mBuffer.putInt(mDensityDpi);
-                mBuffer.flip();
+            mBuffer.clear();
+            mBuffer.putInt(mSurfaceWidth);
+            mBuffer.putInt(mSurfaceHeight);
+            mBuffer.putInt(mDensityDpi);
+            mBuffer.putInt(mTargetFormat);
+            mBuffer.flip();
+            if ((mTargetFormat == Protocol.FORMAT_H264) && (mCodec != null)) {
+                getTransport().sendMessage(Protocol.DisplaySourceService.ID,
+                        Protocol.DisplaySourceService.MSG_SINK_AVAILABLE, mBuffer);
+            } else if ((mTargetFormat == Protocol.FORMAT_JPEG)) {
                 getTransport().sendMessage(Protocol.DisplaySourceService.ID,
                         Protocol.DisplaySourceService.MSG_SINK_AVAILABLE, mBuffer);
             } else {

@@ -34,6 +34,12 @@ public class Protocol {
      * Maximum message content size.
      */
     public static final int MAX_CONTENT_SIZE = MAX_ENVELOPE_SIZE - HEADER_SIZE;
+    public static final int FORMAT_MP4 = 0;
+    public static final int FORMAT_H264 = 1;
+    public static final int FORMAT_FRAMES = 2;
+    public static final int FORMAT_RAW_FRAMES = 3;
+    public static final int FORMAT_JPEG = 4;
+
 
     public static final class DisplaySinkService {
         private DisplaySinkService() { }

@@ -52,6 +52,7 @@ public class DisplaySourceService extends Service {
     private int mSinkWidth;
     private int mSinkHeight;
     private int mSinkDensityDpi;
+    private int mSinkFormat;
 
     private VirtualDisplayThread mVirtualDisplayThread;
 
@@ -83,14 +84,15 @@ public class DisplaySourceService extends Service {
         switch (what) {
             case Protocol.DisplaySourceService.MSG_SINK_AVAILABLE: {
                 getLogger().log("Received MSG_SINK_AVAILABLE");
-                if (content.remaining() >= 12) {
+                if (content.remaining() >= 16) {
                     final int width = content.getInt();
                     final int height = content.getInt();
                     final int densityDpi = content.getInt();
+                    final int targetFormat = content.getInt();
                     if (width >= 0 && width <= 4096
                             && height >= 0 && height <= 4096
                             && densityDpi >= 60 && densityDpi <= 640) {
-                        handleSinkAvailable(width, height, densityDpi);
+                        handleSinkAvailable(width, height, densityDpi, targetFormat);
                         return;
                     }
                 }
@@ -106,19 +108,20 @@ public class DisplaySourceService extends Service {
         }
     }
 
-    private void handleSinkAvailable(int width, int height, int densityDpi) {
+    private void handleSinkAvailable(int width, int height, int densityDpi, int targetFormat) {
         if (mSinkAvailable && mSinkWidth == width && mSinkHeight == height
-                && mSinkDensityDpi == densityDpi) {
+                && mSinkDensityDpi == densityDpi && mSinkFormat == targetFormat) {
             return;
         }
 
         getLogger().log("Accessory display sink available: "
                 + "width=" + width + ", height=" + height
-                + ", densityDpi=" + densityDpi);
+                + ", densityDpi=" + densityDpi + ", format=" + targetFormat);
         mSinkAvailable = true;
         mSinkWidth = width;
         mSinkHeight = height;
         mSinkDensityDpi = densityDpi;
+        mSinkFormat = targetFormat;
         createVirtualDisplay();
     }
 
@@ -136,7 +139,7 @@ public class DisplaySourceService extends Service {
         releaseVirtualDisplay();
 
         mVirtualDisplayThread = new VirtualDisplayThread(
-                mSinkWidth, mSinkHeight, mSinkDensityDpi);
+                mSinkWidth, mSinkHeight, mSinkDensityDpi, mSinkFormat);
         mVirtualDisplayThread.start();
     }
 
@@ -175,17 +178,32 @@ public class DisplaySourceService extends Service {
         private final int mWidth;
         private final int mHeight;
         private final int mDensityDpi;
+        private final int mTargetFormat;
+        private final int flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC;
 
         private volatile boolean mQuitting;
 
-        public VirtualDisplayThread(int width, int height, int densityDpi) {
+        public VirtualDisplayThread(int width, int height, int densityDpi, int targetFormat) {
             mWidth = width;
             mHeight = height;
             mDensityDpi = densityDpi;
+            mTargetFormat = targetFormat;
         }
 
         @Override
         public void run() {
+            if (mTargetFormat == Protocol.FORMAT_H264) {
+                runH264();
+            } else if (mTargetFormat == Protocol.FORMAT_JPEG) {
+                runJpg();
+            }
+        }
+
+        private void runJpg() {
+
+        }
+
+        private void runH264() {
             MediaFormat format = MediaFormat.createVideoFormat("video/avc", mWidth, mHeight);
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                     MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);

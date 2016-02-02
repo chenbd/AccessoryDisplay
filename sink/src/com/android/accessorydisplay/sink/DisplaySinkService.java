@@ -23,6 +23,7 @@ import com.android.accessorydisplay.common.Transport;
 import android.content.Context;
 import android.graphics.Rect;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.media.MediaCodec;
 import android.media.MediaCodec.BufferInfo;
 import android.media.MediaFormat;
@@ -49,7 +50,7 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
     private Surface mSurface;
     private int mSurfaceWidth;
     private int mSurfaceHeight;
-    private int mTargetFormat = FORMAT_H264;
+    private int mTargetFormat = Protocol.FORMAT_H264;
     private MediaCodec mCodec;
     private ByteBuffer[] mCodecInputBuffers;
     private BufferInfo mCodecBufferInfo;
@@ -173,7 +174,7 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
                 }
             } else if (mTargetFormat == Protocol.FORMAT_JPEG) {
                 if (mBitmap != null) {
-                    mBitmap.recyle();
+                    mBitmap.recycle();
                     mBitmap = null;
                 }
                 mBitmap = Bitmap.createBitmap(mSurfaceWidth, mSurfaceHeight, Bitmap.Config.ARGB_8888);
@@ -211,10 +212,11 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
             } else if (mTargetFormat == Protocol.FORMAT_JPEG) {
                 if (mBitmap != null) {
                     // TODO: decode jpg and save to mBitmap
-                    Canvas c = mSurface.lockHardwareCanvas();
+                    //Canvas c = mSurface.lockHardwareCanvas(); // not compile???
+                    Canvas c = mSurface.lockCanvas(null);
                     if (c != null) {
-                        c.drawBitmap(mBitmap, null, null, null);
-                        mSurface.unlockiCanvasAndPost(c);
+                        c.drawBitmap(mBitmap, 0, 0, null);
+                        mSurface.unlockCanvasAndPost(c);
                     }
                 }
             }

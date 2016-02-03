@@ -164,6 +164,10 @@ public class DisplaySinkService extends Service implements SurfaceHolder.Callbac
                             "video/avc", mSurfaceWidth, mSurfaceHeight);
                     try {
                         mCodec = MediaCodec.createDecoderByType("video/avc");
+                        // createDecoderByType do not throw IOException on version 19
+                        if (mCodec == null) {
+                            throw new IOException("failed to create video/avc decoder");
+                        }
                     } catch (IOException e) {
                         throw new RuntimeException(
                                 "failed to create video/avc decoder", e);

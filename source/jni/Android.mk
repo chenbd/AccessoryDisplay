@@ -6,7 +6,7 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := com_android_accessorydisplay_source_ScreenRecord.cpp
 
 LOCAL_C_INCLUDES:=      \
-        $(LOCAL_PATH)/../include
+        frameworks/av/cmds/screenrecord
 
 LOCAL_SHARED_LIBRARIES:= libandroid_runtime libutils liblog libcutils libnativehelper libandroid libscreenrecord-$(PLATFORM_SDK_VERSION)
 

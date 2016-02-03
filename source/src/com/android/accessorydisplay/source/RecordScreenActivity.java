@@ -17,6 +17,7 @@
 package com.android.accessorydisplay.source;
 
 import com.android.accessorydisplay.common.Logger;
+import com.android.accessorydisplay.common.Protocol;
 import com.android.accessorydisplay.source.presentation.DemoPresentation;
 
 import android.app.Activity;
@@ -99,8 +100,9 @@ public class RecordScreenActivity extends Activity {
             });
         }
     }
-            
-    private final class VirtualDisplayThread extends Thread {
+
+    private final class VirtualDisplayThread extends Thread
+            implements ScreenRecord.NativeEventListener {
         private static final int TIMEOUT_USEC = 1000000;
 
         private final int mWidth;
@@ -117,12 +119,29 @@ public class RecordScreenActivity extends Activity {
 
         @Override
         public void run() {
-             ScreenRecord sr = new ScreenRecord();
-             long hdl = sr.native_startup("aa.mp4");
+            ScreenRecord sr = new ScreenRecord();
+            sr.setNativeListener(this);
+            long hdl = sr.native_init(Protocol.FORMAT_JPEG,           // data format for output
+                0, //jint gWantInfoScreen,    // do we want initial info screen?
+                0, //jint gWantFrameTime,     // do we want times on each frame?
+                800, //jint gVideoWidth,        // default width+height
+                480, //jint gVideoHeight,
+                4000000, //jint gBitRate,     // 4Mbps
+                30, //jint gTimeLimitSec,
+                "/sdcard/aa.jpg");
+
+
+            sr.native_startup(hdl);
+            sr.native_shutdown(hdl);
         }
 
         public void quit() {
             mQuitting = true;
+        }
+
+        public int notify_update(int update_flag, int arg1, int arg2) {
+           Log.d("ScreenRecord", " java , " + update_flag + " , " + arg1 + " ," + arg2);
+           return 0;
         }
     }
 }

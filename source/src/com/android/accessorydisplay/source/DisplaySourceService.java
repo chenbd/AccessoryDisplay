@@ -213,6 +213,10 @@ public class DisplaySourceService extends Service {
             MediaCodec codec;
             try {
                 codec = MediaCodec.createEncoderByType("video/avc");
+                // createEncoderByType do not throw IOException on version 19
+                if (codec == null) {
+                    throw new IOException("failed to create video/avc encoder");
+                }
             } catch (IOException e) {
                 throw new RuntimeException(
                         "failed to create video/avc encoder", e);
